@@ -1,0 +1,30 @@
+name: Test and build local CloudRunner
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - run: docker build -f runner-api/Dockerfile.sandbox -t cloudrunner-sandbox:local runner-api
+      - run: RUN_DOCKER_TESTS=1 pytest -q tests/test_docker.py
+      - run: docker build --build-arg BUILD_VERSION=v1 --label cloudrunner.project=cloudrunner -t cloudrunner-runner:v1 runner-api
+      - run: docker build --build-arg BUILD_VERSION=v2 --label cloudrunner.project=cloudrunner -t cloudrunner-runner:v2 runner-api
+      - run: RUN_LOCAL_TESTS=1 pytest -q tests/test_local_integration.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: dashboard
